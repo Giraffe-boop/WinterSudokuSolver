@@ -6,6 +6,7 @@ import com.google.common.collect.Streams;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -71,10 +72,6 @@ public class Sudoku {
         return count;
     }
 
-    public Stream<Cell> cells(){
-        return Arrays.stream(this.current);
-    }
-
     @Override
     public String toString() {
         return "Puzzle: " + name + "\n" + rows.stream()
@@ -109,7 +106,7 @@ public class Sudoku {
     }
 
     public Sudoku copy(String name){
-        Sudoku copy = new Sudoku(name, initial);
+        Sudoku copy = new Sudoku(name != null ? name : this.name, initial);
         for(int i = 0 ; i < size*size ; i++){
             copy.current[i].setContent(current[i].content);
         }
@@ -122,46 +119,20 @@ public class Sudoku {
                 .collect(Collectors.toList());
     }
 
-    private Queue<Integer> randomValues(DistinctiveElement distinctiveElement) {
-        Set<Integer> existingContent = distinctiveElement.cells()
-                .filter(Cell::isInitial)
-                .map(Cell::getContent)
-                .collect(Collectors.toSet());
-        LinkedList<Integer> linkedList = new LinkedList<>();
-        for(int i = 1 ; i <= size ; i++){
-            if (!existingContent.contains(i)) {
-                linkedList.add(i);
-            }
-        }
-        Collections.shuffle(linkedList);
-        return linkedList;
+    public List<DistinctiveElement> getRows() {
+        return rows;
     }
-    public Optional<Sudoku> solve() {
-        for(int r = 0 ; r < size ; r++){
-            final DistinctiveElement row = rows.get(r);
-            final Set<Integer> rval = row.getFreeValues();
-            for(int c = 0; c < size; c++){
-                Cell cell = row.cells.get(c);
-                if(!cell.isInitial()) {
-                    final Set<Integer> cval = cols.get(c).getFreeValues();
-                    Set<Integer> rc = Sets.intersection(rval, cval).immutableCopy();
-                    if(rc.isEmpty()){
-                        return Optional.empty();
-                    }
-                    int blockRow = Math.floorDiv(r, sqrtSize);
-                    int blockCol = Math.floorDiv(c, sqrtSize);
-                    int blockIndex = blockRow * sqrtSize + blockCol;
-                    final Set<Integer> block = blocks.get(blockIndex).getFreeValues();
-                    Set<Integer> rcb = Sets.intersection(rc, block);
-                    if(rcb.isEmpty()){
-                        return Optional.empty();
-                    }
-                    LinkedList<Integer> toShuffle = new LinkedList<>(rcb);
-                    cell.setContent(toShuffle.get(RANDOM.nextInt(toShuffle.size())));
-                }
-            }
-        }
-        return Optional.of(this);
+
+    public DistinctiveElement getRow(int r) {
+        return this.rows.get(r);
+    }
+
+    public DistinctiveElement getColumn(int c) {
+        return this.cols.get(c);
+    }
+
+    public DistinctiveElement getBlock(int blockIndex) {
+        return this.blocks.get(blockIndex);
     }
 
     public static class Cell {
@@ -291,6 +262,10 @@ public class Sudoku {
 
         public Stream<Cell> cells() {
             return cells.stream();
+        }
+
+        public List<Cell> getCells() {
+            return this.cells;
         }
     }
 
