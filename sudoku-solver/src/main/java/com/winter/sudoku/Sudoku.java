@@ -19,53 +19,70 @@ public class Sudoku {
 
     private final String name;
     private final Integer[] initial;
-    private final Cell[] current;
-    private final List<DistinctiveElement> rows;
-    private final List<DistinctiveElement> cols;
-    private final List<DistinctiveElement> blocks;
+    private Stack<Integer[]> saves = new Stack<>();
+    private final List<Cell> cells;
+    private final Map<Integer, DistinctiveElement> rows;
+    private final Map<Integer, DistinctiveElement> cols;
+    private final Map<Integer, DistinctiveElement> blocks;
     private final List<DistinctiveElement> allDistinctiveElements;
 
     private static final AtomicInteger COUNTER = new AtomicInteger(0);
     private final int count;
 
     public Sudoku(String name, Integer[] initial) {
+        this.initial = initial;
         this.count = COUNTER.incrementAndGet();
         this.name = name;
         this.size = Long.valueOf(Math.round(Math.sqrt(initial.length))).intValue();
-        this.initial = Arrays.copyOf(initial, initial.length);
+        saves.push(Arrays.copyOf(initial, initial.length));
         sqrtSize = Long.valueOf(Math.round(Math.sqrt(size))).intValue();
-        current = new Cell[size*size];
-        rows = fluffList(DistinctiveElementType.ROW, size);
-        cols = fluffList(DistinctiveElementType.COLUMN, size);
-        blocks = new ArrayList<>(size);
-        for(int i = 0; i < size; i++){
-            blocks.add(new DistinctiveElement(DistinctiveElementType.BLOCK, i, new ArrayList<>(size)));
+        cells = new ArrayList<>(initial.length);
+
+        rows = fluff(DistinctiveElementType.ROW, size);
+        cols = fluff(DistinctiveElementType.COLUMN, size);
+        blocks = fluff(DistinctiveElementType.BLOCK, size);
+
+        for(int i = 0 ; i < initial.length ; i++){
+            int rowIndex = Math.floorDiv(i, size);
+            DistinctiveElement row = rows.get(rowIndex);
+
+            int colIndex = i % size;
+            DistinctiveElement col = rows.get(colIndex);
+
+            int blockIndex = Math.floorDiv(rowIndex, sqrtSize) * sqrtSize + Math.floorDiv(colIndex, sqrtSize);
+            DistinctiveElement block = blocks.get(blockIndex);
+
+            Cell cell = new Cell(row, col, block, initial[i]);
+            row.add(cell);
+            col.add(cell);
+            block.add(cell);
+            cells.add(cell);
         }
 
-        for(int i = 0; i < size*size; i++){
-            int row = Math.floorDiv(i, size);
-            int col = i % size;
-
-            Cell cell;
-            if(initial[i] != null){
-                cell = new Cell(row, col, initial[i]);
-            }else{
-                cell = new Cell(row, col);
-            }
-            current[i] = cell;
-            rows.get(row).set(col, cell);
-            cols.get(col).set(row, cell);
-
-            int blockRow = Math.floorDiv(row, sqrtSize);
-            int blockCol = Math.floorDiv(col, sqrtSize);
-            int blockIndex = blockRow * sqrtSize + blockCol;
-            blocks.get(blockIndex).add(cell);
-        }
         this.allDistinctiveElements = ImmutableList.<DistinctiveElement>builder()
-                .addAll(rows)
-                .addAll(cols)
-                .addAll(blocks)
+                .addAll(rows.values())
+                .addAll(cols.values())
+                .addAll(blocks.values())
                 .build();
+
+        fill(initial);
+        if(1==1){
+            return;
+        }
+    }
+
+    private Map<Integer, DistinctiveElement> fluff(DistinctiveElementType type, int size) {
+        Map<Integer, DistinctiveElement> fluffed = new HashMap<>();
+        for(int i = 0 ; i < size; i++){
+            fluffed.put(i, new DistinctiveElement(type, size));
+        }
+        return fluffed;
+    }
+
+    private void fill(Integer[] values){
+        for(int i = 0; i < size*size; i++){
+            cells.get(i).setContent(values[i]);
+        }
     }
 
     public int getCount() {
@@ -74,21 +91,9 @@ public class Sudoku {
 
     @Override
     public String toString() {
-        return "Puzzle: " + name + "\n" + rows.stream()
+        return "Puzzle: " + name + "\n" + rows.values().stream()
                 .map(c -> c.toString())
                 .collect(Collectors.joining("\n"));
-    }
-
-    private List<DistinctiveElement> fluffList(DistinctiveElementType type, int size) {
-        List<DistinctiveElement> list = new ArrayList<>(9);
-        for(int i = 0 ; i < size ; i++){
-            ArrayList<Cell> cells = new ArrayList<>(size);
-            for(int j = 0; j < size; j++){
-                cells.add(new Cell(i, j, null));
-            }
-            list.add(new DistinctiveElement(type, i, cells));
-        }
-        return list;
     }
 
     public int getSize() {
@@ -96,7 +101,7 @@ public class Sudoku {
     }
 
     public boolean setValue(int row, int col, Integer value){
-        Cell cell = this.current[size*row+col];
+        Cell cell = this.cells.get(size*row+col);
         if(cell.isInitial()){
             return false;
         }else {
@@ -108,7 +113,7 @@ public class Sudoku {
     public Sudoku copy(String name){
         Sudoku copy = new Sudoku(name != null ? name : this.name, initial);
         for(int i = 0 ; i < size*size ; i++){
-            copy.current[i].setContent(current[i].content);
+            copy.cells.get(i).setContent(cells.get(i).content);
         }
         return copy;
     }
@@ -120,7 +125,10 @@ public class Sudoku {
     }
 
     public List<DistinctiveElement> getRows() {
-        return rows;
+        return rows.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(Map.Entry::getValue)
+                .collect(Collectors.toList());
     }
 
     public DistinctiveElement getRow(int r) {
@@ -136,30 +144,26 @@ public class Sudoku {
     }
 
     public static class Cell {
-        private final int row;
-        private final int col;
+        private final DistinctiveElement row;
+        private final DistinctiveElement col;
+        private final DistinctiveElement block;
         private Integer content;
 
         private final boolean initial;
 
-        public Cell(int row, int col, Integer content) {
+        public Cell(DistinctiveElement row, DistinctiveElement col, DistinctiveElement block, Integer content) {
             this.row = row;
             this.col = col;
-            initial = true;
+            this.block = block;
+            initial = content != null;
             this.content = content;
-        }
-
-        public Cell(int row, int col) {
-            this.row = row;
-            this.col = col;
-            initial = false;
         }
 
         @Override
         public String toString() {
             return "Cell{" +
-                    "row=" + row +
-                    ", col=" + col +
+                    "row=" + row.getIndex() +
+                    ", col=" + col.getIndex() +
                     ", content=" + content +
                     ", initial=" + initial +
                     '}';
@@ -178,12 +182,15 @@ public class Sudoku {
             return initial;
         }
 
-        public int getRow() {
-            return row;
+        public boolean isEmpty(){
+            return this.content == null;
         }
 
-        public int getCol() {
-            return col;
+        public Set<Integer> possibleValues(){
+            Set<Integer> values = new HashSet<>(row.getFreeValues());
+            values.retainAll(col.getFreeValues());
+            values.retainAll(block.getFreeValues());
+            return values;
         }
     }
 
@@ -194,13 +201,16 @@ public class Sudoku {
     public static class DistinctiveElement {
         private final DistinctiveElementType type;
         private final int index;
-        private final List<Cell> cells;
+        private final List<Cell> cells = new ArrayList<>();
         private int trueSum;
 
-        private DistinctiveElement(DistinctiveElementType type, int index, List<Cell> cells){
+        private DistinctiveElement(DistinctiveElementType type, int index){
             this.type = type;
             this.index = index;
-            this.cells = new ArrayList<>(cells);
+        }
+
+        public void addCell(Cell toAdd){
+            this.cells.add(toAdd);
             trueSum = Math.round(cells.size()/2f * (cells.size()+1));
         }
 
@@ -241,13 +251,6 @@ public class Sudoku {
 
         public String getId(){
             return this.type.name() + "-" + index;
-        }
-
-        @Override
-        public String toString() {
-            return cells.stream()
-                    .map(c -> String.valueOf(c.getContent()))
-                    .collect(Collectors.joining(","));
         }
 
         public void add(Cell cell) {
