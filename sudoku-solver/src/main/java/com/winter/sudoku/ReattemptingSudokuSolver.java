@@ -3,31 +3,24 @@ package com.winter.sudoku;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
 public class ReattemptingSudokuSolver implements SudokuSolver {
 
     private final SudokuSolver delegate;
 
-    private final int maxAttempts;
+    private final long maxAttempts;
 
-    public ReattemptingSudokuSolver(SudokuSolver delegate, int maxAttempts) {
+    public ReattemptingSudokuSolver(SudokuSolver delegate, long maxAttempts) {
         this.delegate = delegate;
         this.maxAttempts = maxAttempts;
-    }
-
-    public SudokuSolver getDelegate() {
-        return delegate;
-    }
-
-    public int getMaxAttempts() {
-        return maxAttempts;
     }
 
     @Override
     public Optional<Sudoku> apply(Sudoku sudoku) {
         long start = System.currentTimeMillis();
         //use IntStream to constrain attempts and give an incrementing #
-        return IntStream.range(0,maxAttempts)
+        return LongStream.range(0,maxAttempts)
                 .parallel()
                 .mapToObj(i -> sudoku)
                 .map(delegate::apply)
